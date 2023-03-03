@@ -3,6 +3,7 @@ pub mod input;
 pub mod math;
 pub mod particle_gpu;
 pub mod particle_system;
+pub mod texture;
 pub mod time;
 
 use std::time::Duration;
