@@ -13,12 +13,20 @@ struct VertexOutput {
     @location(2) tex_coords: vec2<f32>,
 };
 
+struct CameraUniform {
+    view_proj: mat4x4<f32>,
+};
+
+@group(1) @binding(0) // 1.
+var<uniform> camera: CameraUniform;
+
 @vertex
 fn vs_main(
     model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let newPos = model.particle_position + model.quad_vertex_position;
+    
+    let newPos = (camera.view_proj * vec4<f32>(model.particle_position.xyz,1.0)) + model.quad_vertex_position;
     out.clip_position = vec4<f32>(newPos.xyz, 1.0);
     out.velocity = model.particle_velocity;
     out.color = model.particle_color;
@@ -30,6 +38,7 @@ fn vs_main(
 var t_diffuse: texture_2d<f32>;
 @group(0)@binding(1)
 var s_diffuse: sampler;
+
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
