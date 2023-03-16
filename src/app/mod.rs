@@ -1,3 +1,4 @@
+pub mod camera;
 pub mod gpu;
 pub mod input;
 pub mod math;
@@ -5,7 +6,6 @@ pub mod particle_gpu;
 pub mod particle_system;
 pub mod texture;
 pub mod time;
-
 use std::time::Duration;
 
 use winit::{
@@ -15,19 +15,27 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-use self::{gpu::Gpu, input::Input, math::UVec2, particle_system::ParticleSystem, time::Time};
+use self::{
+    camera::{Camera, CameraController, FatCamera, Projection},
+    gpu::Gpu,
+    input::Input,
+    math::UVec2,
+    particle_system::ParticleSystem,
+    time::Time,
+};
 
 pub struct App {
-    input: Input,
     pub time: Time,
     pub particle_system: ParticleSystem,
     size: UVec2,
+    pub fat_cam: FatCamera,
+    pub input: Input,
 }
 
 impl App {
     pub fn new(sim_size: UVec2, gpu: &Gpu) -> App {
-        //let mut renderer = Renderer::new(&gpu, sim_size);
-        let mut particle_system = ParticleSystem::new(&gpu, sim_size);
+        let fat_cam = FatCamera::new(sim_size, gpu);
+        let particle_system = ParticleSystem::new(&gpu, sim_size, &fat_cam);
         let time = Time::new(
             1,
             Duration::from_secs(1),
@@ -37,15 +45,17 @@ impl App {
 
         let input = Input::new();
         App {
-            input,
             time,
             particle_system,
             size: sim_size,
+            fat_cam,
+            input,
         }
     }
 
     pub fn handle_input(&mut self, event: &WindowEvent) {
         self.input.handle_input(event);
+        self.fat_cam.controller.process_input(&self.input);
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, gpu: &mut Gpu) {
@@ -57,5 +67,6 @@ impl App {
         }
         self.size.x = new_size.width;
         self.size.y = new_size.height;
+        self.fat_cam.projection.resize(self.size.x, self.size.y);
     }
 }

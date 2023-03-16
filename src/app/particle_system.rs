@@ -1,5 +1,8 @@
 use std::mem;
 
+use wgpu::util::DeviceExt;
+
+use super::camera::{Camera, CameraUniform, FatCamera, Projection};
 use super::particle_gpu::{self, ParticleGPU};
 use super::{gpu::Gpu, math::UVec2};
 
@@ -13,13 +16,13 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    pub fn new(gpu: &Gpu, size: UVec2) -> ParticleSystem {
+    pub fn new(gpu: &Gpu, size: UVec2, fat_cam: &FatCamera) -> ParticleSystem {
         let (compute_bind_group_layout, compute_pipeline) =
             ParticleSystem::build_compute_pipeline(gpu);
 
         let particle_gpu = ParticleGPU::new(gpu, &compute_bind_group_layout);
 
-        let render_pipeline = ParticleSystem::build_render_pipeline(gpu, &particle_gpu);
+        let render_pipeline = ParticleSystem::build_render_pipeline(gpu, &particle_gpu, fat_cam);
         let frame_counter = 0;
         let work_group_count = ((particle_gpu::NUM_PARTICLES as f32)
             / (particle_gpu::PARTICLES_PER_GROUP as f32))
@@ -94,7 +97,11 @@ impl ParticleSystem {
         (compute_bind_group_layout, compute_pipeline)
     }
 
-    fn build_render_pipeline(gpu: &Gpu, particle_gpu: &ParticleGPU) -> wgpu::RenderPipeline {
+    fn build_render_pipeline(
+        gpu: &Gpu,
+        particle_gpu: &ParticleGPU,
+        fat_cam: &FatCamera,
+    ) -> wgpu::RenderPipeline {
         let shader_src = include_str!("../shaders/renderer.wgsl");
         let shader = gpu
             .device
@@ -102,12 +109,16 @@ impl ParticleSystem {
                 label: Some("Render Shader"),
                 source: wgpu::ShaderSource::Wgsl(shader_src.into()),
             });
+
         let render_pipeline_layout =
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Render Pipeline Layout"),
 
-                    bind_group_layouts: &[&particle_gpu.texture_bind_group_layout],
+                    bind_group_layouts: &[
+                        &particle_gpu.texture_bind_group_layout,
+                        &fat_cam.bind_group_layout,
+                    ],
                     push_constant_ranges: &[],
                 });
 
@@ -176,16 +187,17 @@ impl ParticleSystem {
         render_pipeline
     }
 
-    pub fn render(&mut self, gpu: &Gpu) {
-        self.run_render(gpu);
+    pub fn render(&mut self, gpu: &Gpu, fat_cam: &FatCamera) {
+        self.frame_counter += 1;
+        self.run_compute(gpu);
+        self.run_render(gpu, fat_cam);
     }
 
     pub fn update(&mut self, gpu: &Gpu) {
-        self.frame_counter += 1;
-        self.run_compute(gpu);
+        //self.frame_counter += 1;
     }
 
-    fn run_render(&mut self, gpu: &Gpu) {
+    fn run_render(&mut self, gpu: &Gpu, fat_cam: &FatCamera) {
         let output = gpu.surface.get_current_texture().unwrap();
         let view = output
             .texture
@@ -209,11 +221,13 @@ impl ParticleSystem {
                 })],
                 depth_stencil_attachment: None,
             });
+
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.particle_gpu.texture_bind_group, &[]); // NEW!
+            render_pass.set_bind_group(1, &fat_cam.bind_group, &[]);
             render_pass.set_vertex_buffer(
                 0,
-                self.particle_gpu.particle_buffers[(self.frame_counter) % 2].slice(..),
+                self.particle_gpu.particle_buffers[(self.frame_counter + 1) % 2].slice(..),
             );
             render_pass.set_vertex_buffer(1, self.particle_gpu.quad_vertex_buffer.slice(..));
 
@@ -230,7 +244,6 @@ impl ParticleSystem {
     }
 
     fn run_compute(&mut self, gpu: &Gpu) {
-        println!("computing");
         let mut encoder = gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -250,5 +263,6 @@ impl ParticleSystem {
             compute_pass.dispatch_workgroups(self.work_group_count, 1, 1);
         }
         encoder.pop_debug_group();
+        gpu.queue.submit([encoder.finish()]);
     }
 }

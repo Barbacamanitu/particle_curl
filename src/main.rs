@@ -60,7 +60,8 @@ async fn run() {
                     app.particle_system.update(&gpu);
                     app.time.update_tick();
                 }
-                app.particle_system.render(&gpu);
+                app.fat_cam.update_camera(&gpu);
+                app.particle_system.render(&gpu, &app.fat_cam);
                 app.time.render_tick();
                 let fps_data = app.time.get_fps();
                 match fps_data {

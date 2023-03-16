@@ -118,3 +118,61 @@ impl Sub<FVec2> for FVec2 {
         FVec2::new(self.x - rhs.x, self.y - rhs.y)
     }
 }
+
+impl Mul<FVec3> for FVec3 {
+    type Output = FVec3;
+
+    fn mul(self, rhs: FVec3) -> Self::Output {
+        FVec3 {
+            x: self.x * rhs.x,
+            y: self.y * rhs.y,
+            z: self.z * rhs.z,
+        }
+    }
+}
+
+impl Add<FVec3> for FVec3 {
+    type Output = FVec3;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        FVec3 {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl Sub<FVec3> for FVec3 {
+    type Output = FVec3;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        FVec3 {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+        }
+    }
+}
+
+impl Mul<f32> for FVec3 {
+    type Output = FVec3;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        FVec3 {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+        }
+    }
+}
+
+impl FVec3 {
+    pub fn zero() -> FVec3 {
+        FVec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
+    }
+}

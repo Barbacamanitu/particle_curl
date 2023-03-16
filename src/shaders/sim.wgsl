@@ -9,7 +9,19 @@ struct Particles {
     particles: array<Particle>,
 };
 
-let DT: f32 = 0.033333333;
+let DT: f32 = 0.00016;
+let o: f32 = 10.0;
+let p: f32 = 28.0;
+let b: f32 = 2.6666;
+
+
+fn compute_velocity(pos: vec3<f32>) -> vec3<f32> {
+    let x = o * (pos.y-pos.x);
+    let y = pos.x*( p - pos.z) - pos.y;
+    let z = (pos.x * pos.y) - (b * pos.z);
+    let vel = vec3<f32>(x,y,z);
+    return vel;
+}
 
 @group(0) @binding(0) var<storage, read> particles_src : Particles;
 @group(0) @binding(1) var<storage, read_write> particles_dst : Particles;
@@ -24,8 +36,12 @@ fn main(
     if (index >= total) {
         return;
     }
-    let pos = vec4<f32>(0.0,0.0,0.0,1.0);
-    let vel = vec4<f32>(0.0,0.0,0.0,1.0);
-    let col = vec4<f32>(1.0,0.0,0.0,1.0);
-    particles_dst.particles[index] = Particle(pos,vel,col);
+    var p = particles_src.particles[index];
+    let newVel = compute_velocity(p.position.xyz);
+    p.velocity = vec4<f32>(newVel.xyz,0.0);
+    p.position = p.position + p.velocity * DT;
+    
+    particles_dst.particles[index] = p;
 }
+
+

@@ -8,9 +8,9 @@ use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, texture::Texture};
 
-pub const NUM_PARTICLES: usize = 512;
+pub const NUM_PARTICLES: usize = 55512;
 pub const PARTICLES_PER_GROUP: u32 = 64;
-
+const PARTICLE_SIZE: f32 = 0.02;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
@@ -25,8 +25,6 @@ pub struct Particle {
     pub velocity: [f32; 4],
     pub color: [f32; 4],
 }
-
-const PARTICLE_SIZE: f32 = 0.2;
 
 const QUAD_VERTICES: &[Vertex] = &[
     //Top left
@@ -53,24 +51,6 @@ const QUAD_VERTICES: &[Vertex] = &[
 
 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
-const PARTICLES: &[Particle] = &[
-    Particle {
-        position: [-0.3, 0.0, 0.0, 0.0],
-        velocity: [0.01, 0.0, 0.0, 0.0],
-        color: [1.0, 0.0, 0.0, 1.0],
-    },
-    Particle {
-        position: [0.3, 0.0, 0.0, 0.0],
-        velocity: [0.01, 0.01, 0.0, 0.0],
-        color: [0.0, 1.0, 0.0, 1.0],
-    },
-    Particle {
-        position: [0.0, 0.25, 0.0, 0.0],
-        velocity: [-0.01, 0.01, 0.0, 0.0],
-        color: [0.0, 0.0, 1.0, 1.0],
-    },
-];
-
 pub struct ParticleGPU {
     pub quad_vertex_buffer: wgpu::Buffer,
     pub quad_index_buffer: wgpu::Buffer,
@@ -91,7 +71,7 @@ impl ParticleGPU {
         for i in 0..NUM_PARTICLES {
             let x = rng.gen_range(0.0..1.0) - 0.5;
             let y = rng.gen_range(0.0..1.0) - 0.5;
-            let z = 0.0;
+            let z = rng.gen_range(0.0..1.0) - 0.5;
 
             let x_v = rng.gen_range(0.0..0.2) - 0.1;
             let y_v = rng.gen_range(0.0..0.2) - 0.1;
@@ -169,16 +149,6 @@ impl ParticleGPU {
                 contents: bytemuck::cast_slice(QUAD_INDICES),
                 usage: wgpu::BufferUsages::INDEX,
             });
-
-        let particle_position_buffer =
-            gpu.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("particle buffer"),
-                    contents: bytemuck::cast_slice(&PARTICLES),
-                    usage: wgpu::BufferUsages::VERTEX
-                        | wgpu::BufferUsages::STORAGE
-                        | wgpu::BufferUsages::COPY_DST,
-                });
 
         let diffuse_bytes = include_bytes!("particle_texture.png");
         let particle_texture = Texture::from_bytes(

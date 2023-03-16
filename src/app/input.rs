@@ -2,32 +2,28 @@ use winit::event::{MouseButton, WindowEvent};
 
 use super::math::FVec2;
 
+#[derive(Debug)]
 pub struct Input {
     pub mouse_down: bool,
-    pub mouse_drag_pos: FVec2,
-    pub mouse_drag_start: bool,
-    pub latest_mouse_pos: FVec2,
-    pub scroll_delta: f32,
     pub movement: FVec2,
-    pub drag_offset: FVec2,
+    pub mouse_delta: FVec2,
+    last_mouse_pos: FVec2,
+    pub scroll_delta: f32,
 }
 
 impl Input {
     pub fn new() -> Input {
         Input {
             mouse_down: false,
-            mouse_drag_pos: FVec2::default(),
-            mouse_drag_start: false,
-            latest_mouse_pos: FVec2::default(),
-            scroll_delta: 0.0,
             movement: FVec2::default(),
-            drag_offset: FVec2::default(),
+            mouse_delta: FVec2::default(),
+            last_mouse_pos: FVec2::default(),
+            scroll_delta: 0.0,
         }
     }
 
     #[allow(deprecated)]
     pub fn handle_input(&mut self, event: &WindowEvent) {
-        self.scroll_delta = 0.0;
         match event {
             WindowEvent::KeyboardInput {
                 device_id: _,
@@ -35,30 +31,30 @@ impl Input {
                 is_synthetic: _,
             } => match input.state {
                 winit::event::ElementState::Pressed => {
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Left) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::A) {
                         self.movement.x = -1.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Right) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::D) {
                         self.movement.x = 1.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Up) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::W) {
                         self.movement.y = 1.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Down) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::S) {
                         self.movement.y = -1.0;
                     }
                 }
                 winit::event::ElementState::Released => {
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Left) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::A) {
                         self.movement.x = 0.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Right) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::D) {
                         self.movement.x = 0.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Up) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::W) {
                         self.movement.y = 0.0;
                     }
-                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Down) {
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::S) {
                         self.movement.y = 0.0;
                     }
                 }
@@ -69,17 +65,13 @@ impl Input {
                 modifiers: _,
             } => {
                 //Update mouse position
-                self.latest_mouse_pos = FVec2::new(position.x as f32, position.y as f32);
+                let mouse_pos = FVec2::new(position.x as f32, position.y as f32);
 
                 if self.mouse_down {
-                    //Drag camera
-                    let difference = self.latest_mouse_pos - self.mouse_drag_pos;
-                    self.drag_offset = difference;
-                    if self.mouse_drag_start {
-                        self.mouse_drag_start = false;
-                    }
+                    self.mouse_delta = (self.last_mouse_pos - mouse_pos) * FVec2::new(-1.0, 1.0);
+                    self.last_mouse_pos = mouse_pos;
                 } else {
-                    self.mouse_drag_pos = self.latest_mouse_pos;
+                    self.mouse_delta = FVec2::default();
                 }
             }
 
@@ -122,7 +114,5 @@ impl Input {
 
     fn mousedown(&mut self) {
         self.mouse_down = true;
-        self.mouse_drag_start = true;
-        self.mouse_drag_pos = self.latest_mouse_pos;
     }
 }
