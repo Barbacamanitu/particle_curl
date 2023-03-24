@@ -16,7 +16,7 @@ use winit::{
 };
 
 use self::{
-    camera::{Camera, CameraController, FatCamera, Projection},
+    camera::{Camera, FatCamera},
     gpu::Gpu,
     input::Input,
     math::UVec2,

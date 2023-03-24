@@ -1,11 +1,11 @@
 use winit::event::{MouseButton, WindowEvent};
 
-use super::math::FVec2;
+use super::math::{FVec2, FVec3};
 
 #[derive(Debug)]
 pub struct Input {
     pub mouse_down: bool,
-    pub movement: FVec2,
+    pub movement: FVec3,
     pub mouse_delta: FVec2,
     last_mouse_pos: FVec2,
     pub scroll_delta: f32,
@@ -15,7 +15,7 @@ impl Input {
     pub fn new() -> Input {
         Input {
             mouse_down: false,
-            movement: FVec2::default(),
+            movement: FVec3::default(),
             mouse_delta: FVec2::default(),
             last_mouse_pos: FVec2::default(),
             scroll_delta: 0.0,
@@ -38,9 +38,15 @@ impl Input {
                         self.movement.x = 1.0;
                     }
                     if input.virtual_keycode == Some(winit::event::VirtualKeyCode::W) {
-                        self.movement.y = 1.0;
+                        self.movement.z = 1.0;
                     }
                     if input.virtual_keycode == Some(winit::event::VirtualKeyCode::S) {
+                        self.movement.z = -1.0;
+                    }
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Q) {
+                        self.movement.y = 1.0;
+                    }
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::E) {
                         self.movement.y = -1.0;
                     }
                 }
@@ -52,9 +58,15 @@ impl Input {
                         self.movement.x = 0.0;
                     }
                     if input.virtual_keycode == Some(winit::event::VirtualKeyCode::W) {
-                        self.movement.y = 0.0;
+                        self.movement.z = 0.0;
                     }
                     if input.virtual_keycode == Some(winit::event::VirtualKeyCode::S) {
+                        self.movement.z = 0.0;
+                    }
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::Q) {
+                        self.movement.y = 0.0;
+                    }
+                    if input.virtual_keycode == Some(winit::event::VirtualKeyCode::E) {
                         self.movement.y = 0.0;
                     }
                 }
@@ -69,10 +81,10 @@ impl Input {
 
                 if self.mouse_down {
                     self.mouse_delta = (self.last_mouse_pos - mouse_pos) * FVec2::new(-1.0, 1.0);
-                    self.last_mouse_pos = mouse_pos;
                 } else {
                     self.mouse_delta = FVec2::default();
                 }
+                self.last_mouse_pos = mouse_pos;
             }
 
             WindowEvent::MouseWheel {

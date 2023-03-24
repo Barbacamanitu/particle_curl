@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, texture::Texture};
 
-pub const NUM_PARTICLES: usize = 55512;
+pub const NUM_PARTICLES: usize = 2000;
 pub const PARTICLES_PER_GROUP: u32 = 64;
 const PARTICLE_SIZE: f32 = 0.02;
 #[repr(C)]
@@ -68,18 +68,19 @@ impl ParticleGPU {
         let mut rng = rand::thread_rng();
 
         let start = time::Instant::now();
+        let scalar = 1.1;
         for i in 0..NUM_PARTICLES {
-            let x = rng.gen_range(0.0..1.0) - 0.5;
-            let y = rng.gen_range(0.0..1.0) - 0.5;
-            let z = rng.gen_range(0.0..1.0) - 0.5;
+            let x = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
+            let y = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
 
-            let x_v = rng.gen_range(0.0..0.2) - 0.1;
-            let y_v = rng.gen_range(0.0..0.2) - 0.1;
+            let x_v = rng.gen_range(0.0..0.2) - 0.001;
+            let y_v = rng.gen_range(0.0..0.2) - 0.001;
             let z_v = 0.0;
 
-            let r = rng.gen_range(0.0..1.0);
-            let g = rng.gen_range(0.0..1.0);
-            let b = rng.gen_range(0.0..1.0);
+            let r = if x < 0.0 { 1.0 } else { 0.0 };
+            let g = if y < 0.0 { 1.0 } else { 0.0 };
+            let b = if z < 0.0 { 1.0 } else { 0.0 };
             particle_data.push(Particle {
                 position: [x, y, z, 0.0],
                 velocity: [x_v, y_v, z_v, 0.0],

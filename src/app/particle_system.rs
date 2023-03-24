@@ -2,7 +2,7 @@ use std::mem;
 
 use wgpu::util::DeviceExt;
 
-use super::camera::{Camera, CameraUniform, FatCamera, Projection};
+use super::camera::FatCamera;
 use super::particle_gpu::{self, ParticleGPU};
 use super::{gpu::Gpu, math::UVec2};
 
