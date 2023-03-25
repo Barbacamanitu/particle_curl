@@ -4,25 +4,24 @@ use cgmath::{InnerSpace, Rad, Vector3};
 
 use crate::app::input::Input;
 
-use super::Camera;
-
 use std::f32::consts::FRAC_PI_2;
+
+use super::FPSCamera;
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 #[derive(Debug)]
-pub struct CameraController {
+pub struct FPSCameraController {
     amount_right: f32,
     amount_forward: f32,
     amount_up: f32,
     rotate_horizontal: f32,
     rotate_vertical: f32,
-    scroll: f32,
     speed: f32,
     sensitivity: f32,
 }
 
-impl CameraController {
+impl FPSCameraController {
     pub fn new(speed: f32, sensitivity: f32) -> Self {
         Self {
             amount_right: 0.0,
@@ -30,7 +29,6 @@ impl CameraController {
             amount_up: 0.0,
             rotate_horizontal: 0.0,
             rotate_vertical: 0.0,
-            scroll: 0.0,
             speed,
             sensitivity,
         }
@@ -38,14 +36,14 @@ impl CameraController {
 
     pub fn process_input(&mut self, input: &Input) {
         let m = input.movement;
-        self.amount_forward = -m.z;
+        self.amount_forward = m.z;
         self.amount_right = m.x;
         self.amount_up = m.y;
         self.rotate_horizontal = input.mouse_delta.x;
-        self.rotate_vertical = input.mouse_delta.y;
+        self.rotate_vertical = -input.mouse_delta.y;
     }
 
-    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
+    pub fn update_camera(&mut self, camera: &mut FPSCamera, dt: Duration) {
         let dt = dt.as_secs_f32();
 
         // Move forward/backward and left/right

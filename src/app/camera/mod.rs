@@ -1,24 +1,26 @@
 pub mod controller;
+pub mod orbit;
+pub mod orbit_controller;
 pub mod projection;
 use std::time::Duration;
 
-use cgmath::{Matrix4, Point3, Rad, Vector3};
+use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
 use wgpu::util::DeviceExt;
 
-use self::{controller::CameraController, projection::Projection};
+use self::{controller::FPSCameraController, orbit::OrbitCamera, projection::Projection};
 
 use super::{gpu::Gpu, math::UVec2};
 
 #[derive(Debug)]
-pub struct Camera {
+pub struct FPSCamera {
     pub position: Point3<f32>,
     yaw: Rad<f32>,
     pitch: Rad<f32>,
 }
 
 pub struct FatCamera {
-    pub camera: Camera,
-    pub controller: CameraController,
+    pub camera: FPSCamera,
+    pub controller: FPSCameraController,
     pub projection: Projection,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub buffer: wgpu::Buffer,
@@ -33,11 +35,11 @@ impl FatCamera {
         self.uniform = CameraUniform::from_camera(&self.camera, &self.projection);
         gpu.queue
             .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
-        println!("Camera: {:?}", self.camera);
+        //println!("Camera: {:?}", self.camera);
     }
 
     pub fn new(size: UVec2, gpu: &Gpu) -> FatCamera {
-        let camera = Camera::new((0.0, 0.0, 1.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera = FPSCamera::new((0.0, 0.0, 1.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection = Projection::new(
             size.x,
             size.y,
@@ -45,7 +47,7 @@ impl FatCamera {
             0.000001,
             10000000000000000000.0,
         );
-        let controller = CameraController::new(2.5, 0.3);
+        let controller = FPSCameraController::new(3.5, 1.3);
         let bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -107,14 +109,20 @@ impl CameraUniform {
             view_proj: cgmath::Matrix4::identity().into(),
         }
     }
-    pub fn from_camera(camera: &Camera, projection: &Projection) -> CameraUniform {
+    pub fn from_camera(camera: &FPSCamera, projection: &Projection) -> CameraUniform {
+        CameraUniform {
+            view_proj: (projection.calc_matrix() * camera.calc_matrix()).into(),
+        }
+    }
+
+    pub fn from_orbit_camera(camera: &OrbitCamera, projection: &Projection) -> CameraUniform {
         CameraUniform {
             view_proj: (projection.calc_matrix() * camera.calc_matrix()).into(),
         }
     }
 }
 
-impl Camera {
+impl FPSCamera {
     pub fn new<V: Into<Point3<f32>>, Y: Into<Rad<f32>>, P: Into<Rad<f32>>>(
         position: V,
         yaw: Y,
@@ -126,13 +134,13 @@ impl Camera {
             pitch: pitch.into(),
         }
     }
-
     pub fn calc_matrix(&self) -> Matrix4<f32> {
         let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
 
-        let forward = Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw);
+        let direction =
+            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize();
 
-        Matrix4::look_to_rh(self.position, forward, Vector3::unit_y())
+        Matrix4::look_to_rh(self.position, direction, Vector3::unit_y())
     }
 }

@@ -26,7 +26,7 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     
-    let newPos = (camera.view_proj * vec4<f32>(model.particle_position.xyz,1.0)) + model.quad_vertex_position;
+    let newPos = (camera.view_proj * model.particle_position) + model.quad_vertex_position;
     out.clip_position = vec4<f32>(newPos.xyz, 1.0);
     out.velocity = model.particle_velocity;
     out.color = model.particle_color;

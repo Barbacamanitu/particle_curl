@@ -16,11 +16,7 @@ use winit::{
 };
 
 use self::{
-    camera::{Camera, FatCamera},
-    gpu::Gpu,
-    input::Input,
-    math::UVec2,
-    particle_system::ParticleSystem,
+    camera::FatCamera, gpu::Gpu, input::Input, math::UVec2, particle_system::ParticleSystem,
     time::Time,
 };
 
