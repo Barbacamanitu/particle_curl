@@ -33,11 +33,17 @@ fn vs_main(
     //Calculate corners of quad using inverse camera view matrix
     let billboard_pos = camera_view_inv._mat * model.quad_vertex_position;
     let part_pos = model.particle_position + billboard_pos;
-
     //Clip position calculated using view matrix, projection matrix, and and particle position
     out.clip_position = camera_projection._mat * camera_view._mat * part_pos;
     out.velocity = model.particle_velocity;
-    out.color = model.particle_color;
+
+    let s = 100.0;
+    let r = abs(model.particle_velocity.x)/s;
+    let g = abs(model.particle_velocity.y)/s;
+    let b = abs(model.particle_velocity.z)/s;
+    let col = vec4<f32>(r,g,b,0.5);
+
+    out.color = col;
     out.tex_coords = model.quad_tex_coords;
     return out;
 }

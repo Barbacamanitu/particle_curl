@@ -8,9 +8,9 @@ use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, texture::Texture};
 
-pub const NUM_PARTICLES: usize = 2000;
+pub const NUM_PARTICLES: usize = 100000;
 pub const PARTICLES_PER_GROUP: u32 = 64;
-const PARTICLE_SIZE: f32 = 0.02;
+const PARTICLE_SIZE: f32 = 0.2;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
@@ -82,7 +82,7 @@ impl ParticleGPU {
             let g = if y < 0.0 { 1.0 } else { 0.0 };
             let b = if z < 0.0 { 1.0 } else { 0.0 };
             particle_data.push(Particle {
-                position: [x, y, z, 0.0],
+                position: [x, y, z, 1.0],
                 velocity: [x_v, y_v, z_v, 0.0],
                 color: [r, g, b, 1.0],
             });

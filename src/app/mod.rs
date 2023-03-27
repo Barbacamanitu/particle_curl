@@ -31,7 +31,14 @@ pub struct App {
 
 impl App {
     pub fn new(sim_size: UVec2, gpu: &Gpu) -> App {
-        let fat_cam = FatCamera::new(sim_size, gpu, 100000.0, 1.0, cgmath::Deg(90.0));
+        let fat_cam = FatCamera::new(
+            sim_size,
+            gpu,
+            10.0,
+            1.0,
+            cgmath::Deg(90.0),
+            (0.0, 0.0, 70.0).into(),
+        );
         let particle_system = ParticleSystem::new(&gpu, sim_size, &fat_cam);
         let time = Time::new(
             1,
@@ -74,9 +81,8 @@ impl App {
         }
         self.input.clear(self.time.render_ticks());
         self.fat_cam.controller.process_input(&self.input);
-
+        println!("Camrea: {:?}", self.fat_cam.camera);
         self.fat_cam.update_camera(&gpu);
-        //println!("Camera: {:?}", self.fat_cam.camera);
         self.particle_system.render(&gpu, &self.fat_cam);
         self.time.render_tick();
         let fps_data = self.time.get_fps();

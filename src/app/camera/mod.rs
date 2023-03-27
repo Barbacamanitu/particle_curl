@@ -41,7 +41,6 @@ pub struct FatCamera {
 impl FatCamera {
     fn calc_camera_matrices(&self) -> CameraMatrices {
         let view_matrix = CameraMatrix::from_camera(&self.camera);
-        println!("View matrix: {:?}", view_matrix);
         CameraMatrices {
             view: view_matrix,
             projection: CameraMatrix::from_projection(&self.projection),
@@ -104,8 +103,9 @@ impl FatCamera {
         speed: f32,
         sensitivity: f32,
         fovy: cgmath::Deg<f32>,
+        position: Point3<f32>,
     ) -> FatCamera {
-        let camera = FPSCamera::new((0.0, 0.0, 100.0), cgmath::Deg(-90.0), cgmath::Deg(0.0));
+        let camera = FPSCamera::new(position, cgmath::Deg(-90.0), cgmath::Deg(0.0));
         let projection = Projection::new(size.x, size.y, fovy, 0.0001, 100000.0);
         let controller = FPSCameraController::new(speed, sensitivity);
         let bind_group_layout =
@@ -235,7 +235,9 @@ impl FPSCamera {
 
         let direction =
             Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize();
-        let mat = Matrix4::look_to_rh(self.position, direction, Vector3::unit_y());
+        let up: Vector3<f32> = Vector3::unit_y();
+
+        let mat = Matrix4::look_to_rh(self.position, direction, up);
         mat
     }
 }
