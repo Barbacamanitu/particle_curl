@@ -25,6 +25,7 @@ async fn run() {
         .unwrap();
     let mut gpu = Gpu::new(&window);
     let mut app = App::new(sim_size, &gpu);
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             Event::WindowEvent {
@@ -56,21 +57,7 @@ async fn run() {
                 }
             }
             Event::RedrawRequested(window_id) if window_id == window.id() => {
-                while app.time.can_update() {
-                    app.particle_system.update(&gpu);
-                    app.time.update_tick();
-                }
-                app.fat_cam.update_camera(&gpu);
-                app.particle_system.render(&gpu, &app.fat_cam);
-                app.time.render_tick();
-                let fps_data = app.time.get_fps();
-                match fps_data {
-                    Some(fps) => println!(
-                        "Render FPS: {}, Updates per second: {}",
-                        fps.render_fps, fps.update_fps
-                    ),
-                    None => {}
-                }
+                app.tick(&gpu);
             }
             Event::MainEventsCleared => {
                 // RedrawRequested will only trigger once, unless we manually

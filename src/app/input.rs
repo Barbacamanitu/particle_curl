@@ -6,7 +6,7 @@ use super::math::{FVec2, FVec3};
 pub struct Input {
     pub mouse_down: bool,
     pub movement: FVec3,
-    pub mouse_delta: FVec2,
+    pub mouse_delta: (usize, FVec2),
     last_mouse_pos: FVec2,
     pub scroll_delta: f32,
 }
@@ -16,14 +16,26 @@ impl Input {
         Input {
             mouse_down: false,
             movement: FVec3::default(),
-            mouse_delta: FVec2::default(),
+            mouse_delta: (0, FVec2::default()),
             last_mouse_pos: FVec2::default(),
             scroll_delta: 0.0,
         }
     }
 
+    pub fn clear(&mut self, render_ticks: usize) {
+        let (last_tick, delta) = self.mouse_delta;
+        if render_ticks > last_tick {
+            //Clear mouse move state if there's been a tick since the last update
+            self.mouse_delta = (render_ticks, FVec2::default());
+        }
+    }
+
+    pub fn mouse_delta(&self) -> FVec2 {
+        self.mouse_delta.1
+    }
+
     #[allow(deprecated)]
-    pub fn handle_input(&mut self, event: &WindowEvent) {
+    pub fn handle_input(&mut self, event: &WindowEvent, render_ticks: usize) {
         match event {
             WindowEvent::KeyboardInput {
                 device_id: _,
@@ -80,9 +92,12 @@ impl Input {
                 let mouse_pos = FVec2::new(position.x as f32, position.y as f32);
 
                 if self.mouse_down {
-                    self.mouse_delta = (self.last_mouse_pos - mouse_pos) * FVec2::new(-1.0, 1.0);
+                    self.mouse_delta = (
+                        render_ticks,
+                        (self.last_mouse_pos - mouse_pos) * FVec2::new(-1.0, 1.0),
+                    );
                 } else {
-                    self.mouse_delta = FVec2::default();
+                    self.mouse_delta = (render_ticks, FVec2::default());
                 }
                 self.last_mouse_pos = mouse_pos;
             }
@@ -112,7 +127,7 @@ impl Input {
                 },
                 winit::event::ElementState::Released => match button {
                     MouseButton::Right => {
-                        self.mouseup();
+                        self.mouseup(render_ticks);
                     }
                     _ => {}
                 },
@@ -120,8 +135,9 @@ impl Input {
             _ => {}
         }
     }
-    pub fn mouseup(&mut self) {
+    pub fn mouseup(&mut self, render_ticks: usize) {
         self.mouse_down = false;
+        self.mouse_delta = (render_ticks, FVec2::default());
     }
 
     fn mousedown(&mut self) {

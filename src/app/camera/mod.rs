@@ -1,13 +1,11 @@
 pub mod controller;
-pub mod orbit;
-pub mod orbit_controller;
 pub mod projection;
 use std::time::Duration;
 
-use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3};
+use cgmath::{InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3};
 use wgpu::util::DeviceExt;
 
-use self::{controller::FPSCameraController, orbit::OrbitCamera, projection::Projection};
+use self::{controller::FPSCameraController, projection::Projection};
 
 use super::{gpu::Gpu, math::UVec2};
 
@@ -18,67 +16,158 @@ pub struct FPSCamera {
     pitch: Rad<f32>,
 }
 
+pub struct CameraMatrices {
+    pub view: CameraMatrix,
+    pub projection: CameraMatrix,
+    pub view_inverse: CameraMatrix,
+}
+
+pub struct CameraMatrixBuffers {
+    pub view: wgpu::Buffer,
+    pub projection: wgpu::Buffer,
+    pub view_inverse: wgpu::Buffer,
+}
+
 pub struct FatCamera {
     pub camera: FPSCamera,
     pub controller: FPSCameraController,
     pub projection: Projection,
     pub bind_group_layout: wgpu::BindGroupLayout,
-    pub buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
-    pub uniform: CameraUniform,
+    pub matrices: CameraMatrices,
+    pub matrix_buffers: CameraMatrixBuffers,
 }
 
 impl FatCamera {
+    fn calc_camera_matrices(&self) -> CameraMatrices {
+        let view_matrix = CameraMatrix::from_camera(&self.camera);
+        println!("View matrix: {:?}", view_matrix);
+        CameraMatrices {
+            view: view_matrix,
+            projection: CameraMatrix::from_projection(&self.projection),
+            view_inverse: CameraMatrix::from_camera_inverse(&self.camera),
+        }
+    }
     pub fn update_camera(&mut self, gpu: &Gpu) {
         self.controller
             .update_camera(&mut self.camera, Duration::from_secs_f32(1.0 / 60.0));
-        self.uniform = CameraUniform::from_camera(&self.camera, &self.projection);
-        gpu.queue
-            .write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
-        //println!("Camera: {:?}", self.camera);
+        self.matrices = self.calc_camera_matrices();
+        gpu.queue.write_buffer(
+            &self.matrix_buffers.view,
+            0,
+            bytemuck::cast_slice(&[self.matrices.view]),
+        );
+        gpu.queue.write_buffer(
+            &self.matrix_buffers.projection,
+            0,
+            bytemuck::cast_slice(&[self.matrices.projection]),
+        );
+        gpu.queue.write_buffer(
+            &self.matrix_buffers.view_inverse,
+            0,
+            bytemuck::cast_slice(&[self.matrices.view_inverse]),
+        );
     }
 
-    pub fn new(size: UVec2, gpu: &Gpu) -> FatCamera {
-        let camera = FPSCamera::new((0.0, 0.0, 1.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
-        let projection = Projection::new(
-            size.x,
-            size.y,
-            cgmath::Deg(80.0),
-            0.000001,
-            10000000000000000000.0,
-        );
-        let controller = FPSCameraController::new(3.5, 1.3);
+    fn create_matrix_buffers(gpu: &Gpu, matrices: &CameraMatrices) -> CameraMatrixBuffers {
+        let view_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Camera View Matrix Buffer"),
+                contents: bytemuck::cast_slice(&[matrices.view]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let projection_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Camera View Matrix Buffer"),
+                contents: bytemuck::cast_slice(&[matrices.projection]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+        let view_inverse_buffer =
+            gpu.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Camera View Matrix Buffer"),
+                    contents: bytemuck::cast_slice(&[matrices.view_inverse]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+        CameraMatrixBuffers {
+            view: view_buffer,
+            projection: projection_buffer,
+            view_inverse: view_inverse_buffer,
+        }
+    }
+
+    pub fn new(
+        size: UVec2,
+        gpu: &Gpu,
+        speed: f32,
+        sensitivity: f32,
+        fovy: cgmath::Deg<f32>,
+    ) -> FatCamera {
+        let camera = FPSCamera::new((0.0, 0.0, 100.0), cgmath::Deg(-90.0), cgmath::Deg(0.0));
+        let projection = Projection::new(size.x, size.y, fovy, 0.0001, 100000.0);
+        let controller = FPSCameraController::new(speed, sensitivity);
         let bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
                     label: Some("camera_bind_group_layout"),
                 });
 
-        let uniform = CameraUniform::new();
-        let camera_buffer = gpu
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Camera Buffer"),
-                contents: bytemuck::cast_slice(&[uniform]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-
+        let matrices = CameraMatrices {
+            view: CameraMatrix::from_camera(&camera),
+            projection: CameraMatrix::from_projection(&projection),
+            view_inverse: CameraMatrix::from_camera_inverse(&camera),
+        };
+        let matrix_buffers = FatCamera::create_matrix_buffers(&gpu, &matrices);
         let camera_bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: matrix_buffers.view.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: matrix_buffers.projection.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: matrix_buffers.view_inverse.as_entire_binding(),
+                },
+            ],
             label: Some("camera_bind_group"),
         });
         FatCamera {
@@ -86,9 +175,9 @@ impl FatCamera {
             controller,
             projection,
             bind_group_layout,
-            buffer: camera_buffer,
             bind_group: camera_bind_group,
-            uniform,
+            matrices,
+            matrix_buffers,
         }
     }
 }
@@ -96,29 +185,35 @@ impl FatCamera {
 #[repr(C)]
 // This is so we can store this in a buffer
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
+pub struct CameraMatrix {
     // We can't use cgmath with bytemuck directly so we'll have
     // to convert the Matrix4 into a 4x4 f32 array
-    view_proj: [[f32; 4]; 4],
+    mat: [[f32; 4]; 4],
 }
 
-impl CameraUniform {
+impl CameraMatrix {
     fn new() -> Self {
         use cgmath::SquareMatrix;
         Self {
-            view_proj: cgmath::Matrix4::identity().into(),
+            mat: cgmath::Matrix4::identity().into(),
         }
     }
-    pub fn from_camera(camera: &FPSCamera, projection: &Projection) -> CameraUniform {
-        CameraUniform {
-            view_proj: (projection.calc_matrix() * camera.calc_matrix()).into(),
+    pub fn from_camera(camera: &FPSCamera) -> CameraMatrix {
+        CameraMatrix {
+            mat: (camera.calc_matrix()).into(),
         }
     }
 
-    pub fn from_orbit_camera(camera: &OrbitCamera, projection: &Projection) -> CameraUniform {
-        CameraUniform {
-            view_proj: (projection.calc_matrix() * camera.calc_matrix()).into(),
+    pub fn from_projection(projection: &Projection) -> CameraMatrix {
+        CameraMatrix {
+            mat: projection.calc_matrix().into(),
         }
+    }
+
+    pub fn from_camera_inverse(camera: &FPSCamera) -> CameraMatrix {
+        let view_matrix = camera.calc_matrix();
+        let inv = view_matrix.invert().unwrap();
+        CameraMatrix { mat: inv.into() }
     }
 }
 
@@ -140,7 +235,7 @@ impl FPSCamera {
 
         let direction =
             Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize();
-
-        Matrix4::look_to_rh(self.position, direction, Vector3::unit_y())
+        let mat = Matrix4::look_to_rh(self.position, direction, Vector3::unit_y());
+        mat
     }
 }

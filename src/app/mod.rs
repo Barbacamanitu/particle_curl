@@ -26,11 +26,12 @@ pub struct App {
     size: UVec2,
     pub fat_cam: FatCamera,
     pub input: Input,
+    frame: usize,
 }
 
 impl App {
     pub fn new(sim_size: UVec2, gpu: &Gpu) -> App {
-        let fat_cam = FatCamera::new(sim_size, gpu);
+        let fat_cam = FatCamera::new(sim_size, gpu, 100000.0, 1.0, cgmath::Deg(90.0));
         let particle_system = ParticleSystem::new(&gpu, sim_size, &fat_cam);
         let time = Time::new(
             1,
@@ -46,12 +47,12 @@ impl App {
             size: sim_size,
             fat_cam,
             input,
+            frame: 0,
         }
     }
 
     pub fn handle_input(&mut self, event: &WindowEvent) {
-        self.input.handle_input(event);
-        self.fat_cam.controller.process_input(&self.input);
+        self.input.handle_input(event, self.time.render_ticks());
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, gpu: &mut Gpu) {
@@ -64,5 +65,27 @@ impl App {
         self.size.x = new_size.width;
         self.size.y = new_size.height;
         self.fat_cam.projection.resize(self.size.x, self.size.y);
+    }
+
+    pub fn tick(&mut self, gpu: &Gpu) {
+        while self.time.can_update() {
+            self.particle_system.update(&gpu);
+            self.time.update_tick();
+        }
+        self.input.clear(self.time.render_ticks());
+        self.fat_cam.controller.process_input(&self.input);
+
+        self.fat_cam.update_camera(&gpu);
+        //println!("Camera: {:?}", self.fat_cam.camera);
+        self.particle_system.render(&gpu, &self.fat_cam);
+        self.time.render_tick();
+        let fps_data = self.time.get_fps();
+        match fps_data {
+            Some(fps) => println!(
+                "Render FPS: {}, Updates per second: {}",
+                fps.render_fps, fps.update_fps
+            ),
+            None => {}
+        }
     }
 }

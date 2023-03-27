@@ -39,8 +39,9 @@ impl FPSCameraController {
         self.amount_forward = m.z;
         self.amount_right = m.x;
         self.amount_up = m.y;
-        self.rotate_horizontal = input.mouse_delta.x;
-        self.rotate_vertical = -input.mouse_delta.y;
+        let delta = input.mouse_delta();
+        self.rotate_horizontal = delta.x;
+        self.rotate_vertical = -delta.y;
     }
 
     pub fn update_camera(&mut self, camera: &mut FPSCamera, dt: Duration) {
@@ -60,7 +61,7 @@ impl FPSCameraController {
 
         // Rotate
         camera.yaw += Rad(self.rotate_horizontal) * self.sensitivity * dt;
-        camera.pitch += Rad(self.rotate_vertical) * self.sensitivity * dt;
+        camera.pitch += Rad(self.rotate_vertical) * -self.sensitivity * dt;
 
         // If process_mouse isn't called every frame, these values
         // will not get set to zero, and the camera will rotate

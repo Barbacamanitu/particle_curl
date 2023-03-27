@@ -12,6 +12,7 @@ pub struct Time {
     updates_since_last_fps_check: u32,
     updates_this_frame: u32,
     start_time: Instant,
+    render_ticks: usize,
 }
 
 pub struct FPSData {
@@ -42,6 +43,7 @@ impl Time {
             update_delay,
             last_update: Instant::now(),
             start_time: Instant::now(),
+            render_ticks: 0,
         }
     }
 
@@ -88,5 +90,10 @@ impl Time {
         self.last_frame = Instant::now();
         self.frame_since_last_fps_check += 1;
         self.updates_this_frame = 0;
+        self.render_ticks += 1;
+    }
+
+    pub fn render_ticks(&self) -> usize {
+        self.render_ticks
     }
 }
