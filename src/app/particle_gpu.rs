@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 
 use super::{gpu::Gpu, texture::Texture};
 
-pub const NUM_PARTICLES: usize = 100000;
+pub const NUM_PARTICLES: usize = 1000000;
 pub const PARTICLES_PER_GROUP: u32 = 64;
 const PARTICLE_SIZE: f32 = 0.2;
 #[repr(C)]

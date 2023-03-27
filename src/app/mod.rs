@@ -81,7 +81,7 @@ impl App {
         }
         self.input.clear(self.time.render_ticks());
         self.fat_cam.controller.process_input(&self.input);
-        println!("Camrea: {:?}", self.fat_cam.camera);
+        //println!("Camrea: {:?}", self.fat_cam.camera);
         self.fat_cam.update_camera(&gpu);
         self.particle_system.render(&gpu, &self.fat_cam);
         self.time.render_tick();
