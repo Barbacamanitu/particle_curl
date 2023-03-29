@@ -40,12 +40,7 @@ impl App {
             (0.0, 0.0, 70.0).into(),
         );
         let particle_system = ParticleSystem::new(&gpu, sim_size, &fat_cam);
-        let time = Time::new(
-            1,
-            Duration::from_secs(1),
-            Duration::from_millis(10),
-            Duration::from_millis(1),
-        );
+        let time = Time::new(Duration::from_secs_f32(1.0));
 
         let input = Input::new();
         App {
@@ -75,22 +70,14 @@ impl App {
     }
 
     pub fn tick(&mut self, gpu: &Gpu) {
-        while self.time.can_update() {
-            self.particle_system.update(&gpu);
-            self.time.update_tick();
-        }
         self.input.clear(self.time.render_ticks());
         self.fat_cam.controller.process_input(&self.input);
-        //println!("Camrea: {:?}", self.fat_cam.camera);
         self.fat_cam.update_camera(&gpu);
         self.particle_system.render(&gpu, &self.fat_cam);
         self.time.render_tick();
         let fps_data = self.time.get_fps();
         match fps_data {
-            Some(fps) => println!(
-                "Render FPS: {}, Updates per second: {}",
-                fps.render_fps, fps.update_fps
-            ),
+            Some(fps) => println!("FPS: {}", fps.render_fps),
             None => {}
         }
     }

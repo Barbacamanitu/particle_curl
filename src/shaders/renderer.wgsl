@@ -17,6 +17,20 @@ struct CameraUniform {
     _mat: mat4x4<f32>,
 };
 
+
+fn psin(x: f32) -> f32 {
+    return (sin(x)+1.0)/2.0;
+}
+
+fn vel2col(v: vec4<f32>) -> vec4<f32> {
+    let scalar = 0.025;
+    let lv = length(v);
+    let r = psin(lv * scalar);
+    let g = psin(lv * 3.0 *  scalar);
+    let b = psin((v.z * sin(v.x) + cos(v.y)) * 0.3 * scalar);
+    return vec4<f32>(r,g,b,0.8);
+}
+
 @group(1) @binding(0) // 1.
 var<uniform> camera_view: CameraUniform;
 @group(1) @binding(1) // 1.
@@ -37,11 +51,7 @@ fn vs_main(
     out.clip_position = camera_projection._mat * camera_view._mat * part_pos;
     out.velocity = model.particle_velocity;
 
-    let s = 100.0;
-    let r = abs(model.particle_velocity.x)/s;
-    let g = abs(model.particle_velocity.y)/s;
-    let b = abs(model.particle_velocity.z)/s;
-    let col = vec4<f32>(r,g,b,0.5);
+    let col = vel2col(model.particle_velocity);
 
     out.color = col;
     out.tex_coords = model.quad_tex_coords;
@@ -59,6 +69,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   
     let tex_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
     let p_color = in.color;
-    let n_color = tex_color.rgb * p_color.rgb;
-   return vec4<f32>(n_color.rgb,tex_color.a);
+    let n_color = tex_color.rgba * p_color.rgba;
+   return n_color;
 }

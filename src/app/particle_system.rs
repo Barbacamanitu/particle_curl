@@ -193,10 +193,6 @@ impl ParticleSystem {
         self.run_render(gpu, fat_cam);
     }
 
-    pub fn update(&mut self, gpu: &Gpu) {
-        //self.frame_counter += 1;
-    }
-
     fn run_render(&mut self, gpu: &Gpu, fat_cam: &FatCamera) {
         let output = gpu.surface.get_current_texture().unwrap();
         let view = output

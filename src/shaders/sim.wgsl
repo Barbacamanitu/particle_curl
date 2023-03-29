@@ -9,10 +9,11 @@ struct Particles {
     particles: array<Particle>,
 };
 
-let DT: f32 = 0.008;
+let DT: f32 = 0.016;
 let o: f32 = 10.0;
 let p: f32 = 28.0;
 let b: f32 = 2.6666;
+
 
 
 fn compute_velocity(pos: vec3<f32>) -> vec3<f32> {
