@@ -6,13 +6,10 @@ use bytemuck::{Pod, Zeroable};
 use rand::Rng;
 use wgpu::util::DeviceExt;
 
-use super::{gpu::Gpu, texture::Texture};
+use super::{camera::FatCamera, gpu::Gpu, texture::Texture};
 
-pub const NUM_PARTICLES: usize = 1000000;
 pub const PARTICLES_PER_GROUP: u32 = 64;
 const PARTICLE_SIZE: f32 = 0.2;
-
-const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -62,51 +59,28 @@ pub struct ParticleGPU {
     pub particle_texture: Texture,
     pub texture_bind_group: wgpu::BindGroup,
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub compute_pipeline: wgpu::ComputePipeline,
+    pub work_group_count: u32,
 }
 
 impl ParticleGPU {
-    fn generate_particle_buffers(gpu: &Gpu) -> Vec<wgpu::Buffer> {
+    fn generate_particle_buffers(gpu: &Gpu, particle_data: &Vec<Particle>) -> Vec<wgpu::Buffer> {
         let mut buffers: Vec<wgpu::Buffer> = Vec::new();
-        let mut particle_data: Vec<Particle> = Vec::new();
-        let mut rng = rand::thread_rng();
 
-        let start = time::Instant::now();
-        let scalar = 1.1;
-        for i in 0..NUM_PARTICLES {
-            let x = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-            let y = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-            let z = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-
-            let x_v = rng.gen_range(0.0..0.2) - 0.001;
-            let y_v = rng.gen_range(0.0..0.2) - 0.001;
-            let z_v = 0.0;
-
-            let r = if x < 0.0 { 1.0 } else { 0.0 };
-            let g = if y < 0.0 { 1.0 } else { 0.0 };
-            let b = if z < 0.0 { 1.0 } else { 0.0 };
-            particle_data.push(Particle {
-                position: [x, y, z, 1.0],
-                velocity: [x_v, y_v, z_v, 0.0],
-                color: [r, g, b, 1.0],
-            });
-        }
         for i in 0..2 {
             buffers.push(
                 gpu.device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some(&format!("Particle Buffer {}", i)),
-                        contents: bytemuck::cast_slice(&particle_data),
+                        contents: bytemuck::cast_slice(particle_data),
                         usage: wgpu::BufferUsages::VERTEX
                             | wgpu::BufferUsages::STORAGE
                             | wgpu::BufferUsages::COPY_DST,
                     }),
             );
         }
-        let elapsed = start.elapsed().as_secs();
-        println!(
-            "Generated {} particles in {} seconds.",
-            NUM_PARTICLES, elapsed
-        );
+
         buffers
     }
 
@@ -135,7 +109,7 @@ impl ParticleGPU {
         particle_bind_groups
     }
 
-    pub fn new(gpu: &Gpu, compute_bind_group_layout: &wgpu::BindGroupLayout) -> Self {
+    pub fn new(gpu: &Gpu, fat_cam: &FatCamera, particle_data: &Vec<Particle>) -> Self {
         let quad_vertex_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -204,10 +178,16 @@ impl ParticleGPU {
             label: Some("diffuse_bind_group"),
         });
 
-        let particle_buffers = Self::generate_particle_buffers(gpu);
+        let particle_buffers = Self::generate_particle_buffers(gpu, particle_data);
 
+        let render_pipeline = Self::build_render_pipeline(gpu, &texture_bind_group_layout, fat_cam);
+        let (compute_bind_group_layout, compute_pipeline) =
+            Self::build_compute_pipeline(gpu, particle_data.len());
         let particle_bind_groups =
-            Self::generate_particle_bind_groups(gpu, compute_bind_group_layout, &particle_buffers);
+            Self::generate_particle_bind_groups(gpu, &compute_bind_group_layout, &particle_buffers);
+
+        let work_group_count =
+            ((particle_data.len() as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
         ParticleGPU {
             quad_vertex_buffer,
             quad_index_buffer,
@@ -216,6 +196,154 @@ impl ParticleGPU {
             texture_bind_group,
             texture_bind_group_layout,
             particle_bind_groups,
+            render_pipeline,
+            compute_pipeline,
+            work_group_count,
         }
+    }
+
+    fn build_compute_pipeline(
+        gpu: &Gpu,
+        num_particles: usize,
+    ) -> (wgpu::BindGroupLayout, wgpu::ComputePipeline) {
+        let shader_src = include_str!("../shaders/sim.wgsl");
+        let compute_shader = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Sim Shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+            });
+        let compute_bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: wgpu::BufferSize::new((num_particles * 48) as _),
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: wgpu::BufferSize::new((num_particles * 48) as _),
+                            },
+                            count: None,
+                        },
+                    ],
+                    label: None,
+                });
+
+        let compute_pipeline_layout =
+            gpu.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("particle system compute"),
+                    bind_group_layouts: &[&compute_bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
+        let compute_pipeline =
+            gpu.device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("Compute pipeline"),
+                    layout: Some(&compute_pipeline_layout),
+                    module: &compute_shader,
+                    entry_point: "main",
+                });
+        (compute_bind_group_layout, compute_pipeline)
+    }
+
+    fn build_render_pipeline(
+        gpu: &Gpu,
+        texture_bgl: &wgpu::BindGroupLayout,
+        fat_cam: &FatCamera,
+    ) -> wgpu::RenderPipeline {
+        let shader_src = include_str!("../shaders/renderer.wgsl");
+        let shader = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Render Shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+            });
+
+        let render_pipeline_layout =
+            gpu.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Render Pipeline Layout"),
+
+                    bind_group_layouts: &[texture_bgl, &fat_cam.bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
+        let render_pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Render Pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[
+                        wgpu::VertexBufferLayout {
+                            array_stride: 4 * 12,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4],
+                        },
+                        wgpu::VertexBufferLayout {
+                            array_stride: 4 * 6,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x2],
+                        },
+                    ],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        // 4.
+                        format: gpu.config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw, // 2.
+                    cull_mode: Some(wgpu::Face::Back),
+                    // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    // Requires Features::DEPTH_CLIP_CONTROL
+                    unclipped_depth: false,
+                    // Requires Features::CONSERVATIVE_RASTERIZATION
+                    conservative: false,
+                },
+                depth_stencil: None, // 1.
+                multisample: wgpu::MultisampleState {
+                    count: 1,                         // 2.
+                    mask: !0,                         // 3.
+                    alpha_to_coverage_enabled: false, // 4.
+                },
+                multiview: None, // 5.
+            });
+        render_pipeline
     }
 }

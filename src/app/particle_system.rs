@@ -1,199 +1,60 @@
 use std::mem;
 
+use rand::Rng;
 use wgpu::util::DeviceExt;
 
 use super::camera::FatCamera;
-use super::particle_gpu::{self, ParticleGPU};
+use super::particle_gpu::{self, Particle, ParticleGPU};
+use super::time::Time;
 use super::{gpu::Gpu, math::UVec2};
+
+pub const NUM_PARTICLES: usize = 1000000;
+const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
 
 pub struct ParticleSystem {
     particle_gpu: ParticleGPU,
-    compute_pipeline: wgpu::ComputePipeline,
-    render_pipeline: wgpu::RenderPipeline,
-    frame_counter: usize,
-    work_group_count: u32,
     pub size: UVec2,
 }
 
 impl ParticleSystem {
-    pub fn new(gpu: &Gpu, size: UVec2, fat_cam: &FatCamera) -> ParticleSystem {
-        let (compute_bind_group_layout, compute_pipeline) =
-            ParticleSystem::build_compute_pipeline(gpu);
+    fn create_particle_data() -> Vec<Particle> {
+        let mut particle_data: Vec<Particle> = Vec::new();
+        let mut rng = rand::thread_rng();
+        let scalar = 100.0;
+        for i in 0..NUM_PARTICLES {
+            let x = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
+            let y = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * 0.0;
 
-        let particle_gpu = ParticleGPU::new(gpu, &compute_bind_group_layout);
+            let x_v = 0.0;
+            let y_v = 0.0;
+            let z_v = 0.0;
 
-        let render_pipeline = ParticleSystem::build_render_pipeline(gpu, &particle_gpu, fat_cam);
-        let frame_counter = 0;
-        let work_group_count = ((particle_gpu::NUM_PARTICLES as f32)
-            / (particle_gpu::PARTICLES_PER_GROUP as f32))
-            .ceil() as u32;
-
-        ParticleSystem {
-            particle_gpu,
-            compute_pipeline,
-            render_pipeline,
-            frame_counter,
-            work_group_count,
-            size,
+            let r = 0.0;
+            let g = 0.0;
+            let b = 0.0;
+            particle_data.push(Particle {
+                position: [x, y, z, 1.0],
+                velocity: [x_v, y_v, z_v, 0.0],
+                color: [r, g, b, 1.0],
+            });
         }
+        particle_data
     }
 
-    fn build_compute_pipeline(gpu: &Gpu) -> (wgpu::BindGroupLayout, wgpu::ComputePipeline) {
-        let shader_src = include_str!("../shaders/sim.wgsl");
-        let compute_shader = gpu
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Sim Shader"),
-                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-            });
-        let compute_bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: wgpu::BufferSize::new(
-                                    (particle_gpu::NUM_PARTICLES * 48) as _,
-                                ),
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::COMPUTE,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Storage { read_only: false },
-                                has_dynamic_offset: false,
-                                min_binding_size: wgpu::BufferSize::new(
-                                    (particle_gpu::NUM_PARTICLES * 48) as _,
-                                ),
-                            },
-                            count: None,
-                        },
-                    ],
-                    label: None,
-                });
+    pub fn new(gpu: &Gpu, size: UVec2, fat_cam: &FatCamera) -> ParticleSystem {
+        let particle_gpu = ParticleGPU::new(gpu, fat_cam, &Self::create_particle_data());
 
-        let compute_pipeline_layout =
-            gpu.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("particle system compute"),
-                    bind_group_layouts: &[&compute_bind_group_layout],
-                    push_constant_ranges: &[],
-                });
-
-        let compute_pipeline =
-            gpu.device
-                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                    label: Some("Compute pipeline"),
-                    layout: Some(&compute_pipeline_layout),
-                    module: &compute_shader,
-                    entry_point: "main",
-                });
-        (compute_bind_group_layout, compute_pipeline)
+        ParticleSystem { particle_gpu, size }
     }
 
-    fn build_render_pipeline(
-        gpu: &Gpu,
-        particle_gpu: &ParticleGPU,
-        fat_cam: &FatCamera,
-    ) -> wgpu::RenderPipeline {
-        let shader_src = include_str!("../shaders/renderer.wgsl");
-        let shader = gpu
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Render Shader"),
-                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-            });
-
-        let render_pipeline_layout =
-            gpu.device
-                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Render Pipeline Layout"),
-
-                    bind_group_layouts: &[
-                        &particle_gpu.texture_bind_group_layout,
-                        &fat_cam.bind_group_layout,
-                    ],
-                    push_constant_ranges: &[],
-                });
-
-        let render_pipeline = gpu
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("Render Pipeline"),
-                layout: Some(&render_pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &[
-                        wgpu::VertexBufferLayout {
-                            array_stride: 4 * 12,
-                            step_mode: wgpu::VertexStepMode::Instance,
-                            attributes: &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4],
-                        },
-                        wgpu::VertexBufferLayout {
-                            array_stride: 4 * 6,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &wgpu::vertex_attr_array![3 => Float32x4, 4 => Float32x2],
-                        },
-                    ],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_main",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        // 4.
-                        format: gpu.config.format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::SrcAlpha,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                            alpha: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::One,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw, // 2.
-                    cull_mode: Some(wgpu::Face::Back),
-                    // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    // Requires Features::DEPTH_CLIP_CONTROL
-                    unclipped_depth: false,
-                    // Requires Features::CONSERVATIVE_RASTERIZATION
-                    conservative: false,
-                },
-                depth_stencil: None, // 1.
-                multisample: wgpu::MultisampleState {
-                    count: 1,                         // 2.
-                    mask: !0,                         // 3.
-                    alpha_to_coverage_enabled: false, // 4.
-                },
-                multiview: None, // 5.
-            });
-        render_pipeline
+    pub fn render(&mut self, gpu: &Gpu, fat_cam: &FatCamera, time: &mut Time) {
+        time.render_tick();
+        self.run_compute(gpu, time);
+        self.run_render(gpu, fat_cam, time);
     }
 
-    pub fn render(&mut self, gpu: &Gpu, fat_cam: &FatCamera) {
-        self.frame_counter += 1;
-        self.run_compute(gpu);
-        self.run_render(gpu, fat_cam);
-    }
-
-    fn run_render(&mut self, gpu: &Gpu, fat_cam: &FatCamera) {
+    fn run_render(&mut self, gpu: &Gpu, fat_cam: &FatCamera, time: &Time) {
         let output = gpu.surface.get_current_texture().unwrap();
         let view = output
             .texture
@@ -218,12 +79,12 @@ impl ParticleSystem {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_pipeline(&self.particle_gpu.render_pipeline);
             render_pass.set_bind_group(0, &self.particle_gpu.texture_bind_group, &[]); // NEW!
             render_pass.set_bind_group(1, &fat_cam.bind_group, &[]);
             render_pass.set_vertex_buffer(
                 0,
-                self.particle_gpu.particle_buffers[(self.frame_counter + 1) % 2].slice(..),
+                self.particle_gpu.particle_buffers[(time.render_ticks() + 1) % 2].slice(..),
             );
             render_pass.set_vertex_buffer(1, self.particle_gpu.quad_vertex_buffer.slice(..));
 
@@ -231,7 +92,7 @@ impl ParticleSystem {
                 self.particle_gpu.quad_index_buffer.slice(..),
                 wgpu::IndexFormat::Uint16,
             ); // 1.
-            render_pass.draw_indexed(0..6, 0, 0..particle_gpu::NUM_PARTICLES as u32);
+            render_pass.draw_indexed(0..6, 0, 0..NUM_PARTICLES as u32);
             // 2.
         }
         encoder.pop_debug_group();
@@ -239,7 +100,7 @@ impl ParticleSystem {
         output.present();
     }
 
-    fn run_compute(&mut self, gpu: &Gpu) {
+    fn run_compute(&mut self, gpu: &Gpu, time: &Time) {
         let mut encoder = gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -249,14 +110,14 @@ impl ParticleSystem {
         {
             let mut compute_pass =
                 encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
-            compute_pass.set_pipeline(&self.compute_pipeline);
+            compute_pass.set_pipeline(&self.particle_gpu.compute_pipeline);
             compute_pass.set_bind_group(
                 0,
-                &self.particle_gpu.particle_bind_groups[self.frame_counter % 2],
+                &self.particle_gpu.particle_bind_groups[time.render_ticks() % 2],
                 &[],
             );
 
-            compute_pass.dispatch_workgroups(self.work_group_count, 1, 1);
+            compute_pass.dispatch_workgroups(self.particle_gpu.work_group_count, 1, 1);
         }
         encoder.pop_debug_group();
         gpu.queue.submit([encoder.finish()]);

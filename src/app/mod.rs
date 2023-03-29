@@ -73,8 +73,8 @@ impl App {
         self.input.clear(self.time.render_ticks());
         self.fat_cam.controller.process_input(&self.input);
         self.fat_cam.update_camera(&gpu);
-        self.particle_system.render(&gpu, &self.fat_cam);
-        self.time.render_tick();
+        self.particle_system
+            .render(&gpu, &self.fat_cam, &mut self.time);
         let fps_data = self.time.get_fps();
         match fps_data {
             Some(fps) => println!("FPS: {}", fps.render_fps),
