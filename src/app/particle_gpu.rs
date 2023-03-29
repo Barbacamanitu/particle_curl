@@ -11,6 +11,9 @@ use super::{gpu::Gpu, texture::Texture};
 pub const NUM_PARTICLES: usize = 1000000;
 pub const PARTICLES_PER_GROUP: u32 = 64;
 const PARTICLE_SIZE: f32 = 0.2;
+
+const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
