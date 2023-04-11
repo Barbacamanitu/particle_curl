@@ -17,7 +17,7 @@ use winit::{
 
 use self::{
     camera::FatCamera, gpu::Gpu, input::Input, math::UVec2, particle_system::ParticleSystem,
-    time::Time,
+    texture::Texture, time::Time,
 };
 
 pub struct App {
@@ -35,7 +35,7 @@ impl App {
             sim_size,
             gpu,
             10.0,
-            1.0,
+            0.5,
             cgmath::Deg(90.0),
             (0.0, 0.0, 70.0).into(),
         );
@@ -67,6 +67,8 @@ impl App {
         self.size.x = new_size.width;
         self.size.y = new_size.height;
         self.fat_cam.projection.resize(self.size.x, self.size.y);
+        self.particle_system.particle_gpu.depth_texture =
+            Texture::create_depth_texture(&gpu.device, &gpu.config, "depth_texture");
     }
 
     pub fn tick(&mut self, gpu: &Gpu) {

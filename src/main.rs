@@ -15,7 +15,7 @@ fn main() {
 }
 
 async fn run() {
-    let sim_size = UVec2::new(1024, 1024);
+    let sim_size = UVec2::new(1920, 1080);
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_inner_size(PhysicalSize::new(sim_size.x, sim_size.y))

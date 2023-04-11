@@ -9,7 +9,22 @@ use wgpu::util::DeviceExt;
 use super::{camera::FatCamera, gpu::Gpu, texture::Texture};
 
 pub const PARTICLES_PER_GROUP: u32 = 64;
-const PARTICLE_SIZE: f32 = 0.2;
+const PARTICLE_SIZE: f32 = 0.5;
+
+//Holds all gpu state for particles.
+pub struct ParticleGPU {
+    pub quad_vertex_buffer: wgpu::Buffer,
+    pub quad_index_buffer: wgpu::Buffer,
+    pub particle_buffers: Vec<wgpu::Buffer>,
+    pub particle_bind_groups: Vec<wgpu::BindGroup>,
+    pub particle_texture: Texture,
+    pub texture_bind_group: wgpu::BindGroup,
+    pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub compute_pipeline: wgpu::ComputePipeline,
+    pub work_group_count: u32,
+    pub depth_texture: Texture,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -50,19 +65,6 @@ const QUAD_VERTICES: &[Vertex] = &[
 ];
 
 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-
-pub struct ParticleGPU {
-    pub quad_vertex_buffer: wgpu::Buffer,
-    pub quad_index_buffer: wgpu::Buffer,
-    pub particle_buffers: Vec<wgpu::Buffer>,
-    pub particle_bind_groups: Vec<wgpu::BindGroup>,
-    pub particle_texture: Texture,
-    pub texture_bind_group: wgpu::BindGroup,
-    pub texture_bind_group_layout: wgpu::BindGroupLayout,
-    pub render_pipeline: wgpu::RenderPipeline,
-    pub compute_pipeline: wgpu::ComputePipeline,
-    pub work_group_count: u32,
-}
 
 impl ParticleGPU {
     fn generate_particle_buffers(gpu: &Gpu, particle_data: &Vec<Particle>) -> Vec<wgpu::Buffer> {
@@ -137,6 +139,9 @@ impl ParticleGPU {
         )
         .unwrap(); // CHANGED!
 
+        let depth_texture =
+            Texture::create_depth_texture(&gpu.device, &gpu.config, "depth_texture");
+
         let texture_bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -199,6 +204,7 @@ impl ParticleGPU {
             render_pipeline,
             compute_pipeline,
             work_group_count,
+            depth_texture,
         }
     }
 
@@ -336,7 +342,13 @@ impl ParticleGPU {
                     // Requires Features::CONSERVATIVE_RASTERIZATION
                     conservative: false,
                 },
-                depth_stencil: None, // 1.
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less, // 1.
+                    stencil: wgpu::StencilState::default(), // 2.
+                    bias: wgpu::DepthBiasState::default(),
+                }), // 1.
                 multisample: wgpu::MultisampleState {
                     count: 1,                         // 2.
                     mask: !0,                         // 3.

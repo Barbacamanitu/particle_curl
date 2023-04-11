@@ -12,19 +12,49 @@ pub const NUM_PARTICLES: usize = 1000000;
 const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
 
 pub struct ParticleSystem {
-    particle_gpu: ParticleGPU,
+    pub particle_gpu: ParticleGPU,
     pub size: UVec2,
 }
 
 impl ParticleSystem {
     fn create_particle_data() -> Vec<Particle> {
         let mut particle_data: Vec<Particle> = Vec::new();
+        let cube_size = 50.0;
+
+        let step = cube_size / 100.0;
+        for x in 0..100 {
+            for y in 0..100 {
+                for z in 0..100 {
+                    let xx = (x as f32) * step - (cube_size / 2.0);
+                    let yy = (y as f32) * step - (cube_size / 2.0);
+                    let zz = (z as f32) * step - (cube_size / 2.0);
+
+                    let x_v = 0.0;
+                    let y_v = 0.0;
+                    let z_v = 0.0;
+
+                    let r = 0.0;
+                    let g = 0.0;
+                    let b = 0.0;
+                    particle_data.push(Particle {
+                        position: [xx, yy, zz, 1.0],
+                        velocity: [x_v, y_v, z_v, 0.0],
+                        color: [r, g, b, 1.0],
+                    });
+                }
+            }
+        }
+        particle_data
+    }
+
+    fn create_particle_data_random() -> Vec<Particle> {
+        let mut particle_data: Vec<Particle> = Vec::new();
         let mut rng = rand::thread_rng();
         let scalar = 100.0;
         for i in 0..NUM_PARTICLES {
             let x = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
             let y = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-            let z = (rng.gen_range(0.0..1.0) - 0.5) * 0.0;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
 
             let x_v = 0.0;
             let y_v = 0.0;
@@ -76,7 +106,14 @@ impl ParticleSystem {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.particle_gpu.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             render_pass.set_pipeline(&self.particle_gpu.render_pipeline);
