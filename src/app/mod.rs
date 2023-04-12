@@ -34,8 +34,8 @@ impl App {
         let fat_cam = FatCamera::new(
             sim_size,
             gpu,
-            10.0,
-            0.5,
+            30.0,
+            0.4,
             cgmath::Deg(90.0),
             (0.0, 0.0, 70.0).into(),
         );
