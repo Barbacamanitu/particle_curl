@@ -8,7 +8,8 @@ use super::particle_gpu::{self, Particle, ParticleGPU};
 use super::time::Time;
 use super::{gpu::Gpu, math::UVec2};
 
-pub const NUM_PARTICLES: usize = 1000000;
+pub const NUM_PARTICLES: usize = 2000000;
+const cube_size: f32 = 200.0;
 const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
 
 pub struct ParticleSystem {
@@ -19,7 +20,6 @@ pub struct ParticleSystem {
 impl ParticleSystem {
     fn create_particle_data() -> Vec<Particle> {
         let mut particle_data: Vec<Particle> = Vec::new();
-        let cube_size = 50.0;
 
         let step = cube_size / 100.0;
         for x in 0..100 {
@@ -50,11 +50,10 @@ impl ParticleSystem {
     fn create_particle_data_random() -> Vec<Particle> {
         let mut particle_data: Vec<Particle> = Vec::new();
         let mut rng = rand::thread_rng();
-        let scalar = 100.0;
         for i in 0..NUM_PARTICLES {
-            let x = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-            let y = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
-            let z = (rng.gen_range(0.0..1.0) - 0.5) * scalar;
+            let x = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
+            let y = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
 
             let x_v = 0.0;
             let y_v = 0.0;
@@ -73,7 +72,7 @@ impl ParticleSystem {
     }
 
     pub fn new(gpu: &Gpu, size: UVec2, fat_cam: &FatCamera) -> ParticleSystem {
-        let particle_gpu = ParticleGPU::new(gpu, fat_cam, &Self::create_particle_data());
+        let particle_gpu = ParticleGPU::new(gpu, fat_cam, &Self::create_particle_data_random());
 
         ParticleSystem { particle_gpu, size }
     }

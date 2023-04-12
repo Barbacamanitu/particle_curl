@@ -25,7 +25,7 @@ fn psin(x: f32) -> f32 {
 }
 
 fn vel2col(v: vec4<f32>) -> vec4<f32> {
-    let scalar = 0.525;
+    let scalar = 0.125;
     let lv = length(v);
     let r = psin(lv * scalar);
     let g = psin(0.5 + lv * 2.0 *  scalar);

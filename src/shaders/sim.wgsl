@@ -1,3 +1,8 @@
+let max_extent: f32 = 500.0;
+let velocity_weight: f32 = 0.015;
+let direction_noise_scale: f32 = 0.0041;
+let speed_noise_scale: f32 = 0.008;
+let speed_multiplier: f32 = 50.0;
 struct Particle {
     position: vec4<f32>,
     velocity: vec4<f32>,
@@ -87,7 +92,7 @@ fn simplex3d_fractal(m: vec3<f32>) -> f32 {
 			+0.1333333*simplex3d(4.0*m*rot3)
 			+0.0666667*simplex3d(8.0*m);
 }
-let max_extent: f32 = 100.0;
+
 
 
 
@@ -107,15 +112,15 @@ fn yawpitch_to_direction(yaw: f32, pitch: f32) -> vec3<f32> {
 
 
 fn compute_velocity(pos: vec3<f32>) -> vec3<f32> {
-    let direction_noise = simplex3d_fractal(pos * 0.015);
-    let speed_noise = 0.5 + simplex3d_fractal(pos * 0.001);
+    let direction_noise = simplex3d_fractal(pos * direction_noise_scale);
+    let speed_noise = 0.5 + simplex3d_fractal(pos * speed_noise_scale);
 
     //Yaw between 0 and 2pi
     let yaw = direction_noise * pi * 2.0;
     //Pitch between 
-    let pitch = sin(direction_noise * pi * 2.0) * pi;
+    let pitch = sin(direction_noise * pi * 2.0 * 4.0) * pi;
     let dir = yawpitch_to_direction(yaw,pitch);
-    let speed = speed_noise * 20.0;
+    let speed = speed_noise * speed_multiplier;
     let vel = dir * speed;
     return vel;
 }
@@ -163,7 +168,7 @@ fn main(
     let newVel = compute_velocity(p.position.xyz);
     let oldVel = p.velocity.xyz;
 
-    let v = mix(oldVel,newVel,0.01);
+    let v = mix(oldVel,newVel,velocity_weight);
     p.velocity = vec4<f32>(v,0.0);
     p.position = p.position + p.velocity * DT;
     p.position = clamp_position(p.position);
