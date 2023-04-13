@@ -1,7 +1,7 @@
 
 //Parameters
-let noise_scale: f32 = 0.030;
-let speed_multiplier: f32 = 15.0;
+let noise_scale: f32 = 0.010;
+let speed_multiplier: f32 = 35.0;
 let max_extent: f32 = 300.0;
 
 //Constants
@@ -103,10 +103,10 @@ fn vector_field(p: vec3<f32>, scale: f32) -> vec3<f32> {
     let y_p = pos + vec3<f32>(1000.0,0.0,0.0);
     let z_p = pos + vec3<f32>(2000.0,0.0,0.0);
 
-    let x_n = simplex3d_fractal(x_p);
-    let y_n = simplex3d_fractal(y_p);
-    let z_n = simplex3d_fractal(z_p);
-    let direction = vec3<f32>(x_n,y_n,z_n);
+    let x_n = simplex3d(x_p);
+    let y_n = simplex3d(y_p);
+    let z_n = simplex3d(z_p);
+    let direction = vec3<f32>(x_n,y_n,z_n) + vec3<f32>(0.0,0.6,0.0);
     return direction;
 }
 
@@ -121,7 +121,7 @@ fn curl(pos: vec3<f32>) -> vec3<f32> {
 
 fn potential(pos: vec3<f32>) -> vec3<f32> {
     let vf = vector_field(pos,noise_scale);
-    return (vf * 1.0);
+    return (vf * speed_multiplier);
 }
 
 fn clamp_position(pos: vec3<f32>) -> vec3<f32> {
@@ -166,7 +166,7 @@ fn main(
     var part = particles_src.particles[index];
     let p = part.position.xyz;
     let pot = potential(p);
-    let epsilon = 0.00001;
+    let epsilon = 0.0001;
     // Partial derivatives of different components of the potential
     let dp3_dy = (pot.z - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).z / epsilon;
     let dp2_dz = (pot.y - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).y / epsilon;

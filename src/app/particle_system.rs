@@ -17,16 +17,14 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-   
-
     fn create_particle_data_random() -> Vec<Particle> {
         let mut particle_data: Vec<Particle> = Vec::new();
         let mut rng = rand::thread_rng();
         for i in 0..NUM_PARTICLES {
             let x = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
             let y = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
-            //let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
-            let z = 0.0;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
+            //let z = 0.0;
             let x_v = 0.0;
             let y_v = 0.0;
             let z_v = 0.0;
