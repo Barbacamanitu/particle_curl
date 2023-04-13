@@ -1,8 +1,16 @@
-let max_extent: f32 = 500.0;
-let velocity_weight: f32 = 0.015;
-let direction_noise_scale: f32 = 0.0041;
-let speed_noise_scale: f32 = 0.008;
-let speed_multiplier: f32 = 50.0;
+
+//Parameters
+let noise_scale: f32 = 0.030;
+let speed_multiplier: f32 = 15.0;
+let max_extent: f32 = 300.0;
+
+//Constants
+let pi: f32 = 3.14159;
+let rot1: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.37, 0.36, 0.85),vec3<f32>(-0.14,-0.93, 0.34),vec3<f32>(0.92, 0.01,0.4));
+let rot2: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.55,-0.39, 0.74),vec3<f32>( 0.33,-0.91,-0.24),vec3<f32>(0.77, 0.12,0.63));
+let rot3: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.71, 0.52,-0.47),vec3<f32>(-0.08,-0.72,-0.68),vec3<f32>(-0.7,-0.45,0.56));
+
+
 struct Particle {
     position: vec4<f32>,
     velocity: vec4<f32>,
@@ -80,11 +88,6 @@ fn simplex3d(p: vec3<f32>) -> f32 {
 	 return dot(d, vec4<f32>(52.0));
 }
 
-let pi: f32 = 3.14159;
-let rot1: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.37, 0.36, 0.85),vec3<f32>(-0.14,-0.93, 0.34),vec3<f32>(0.92, 0.01,0.4));
-let rot2: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.55,-0.39, 0.74),vec3<f32>( 0.33,-0.91,-0.24),vec3<f32>(0.77, 0.12,0.63));
-let rot3: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.71, 0.52,-0.47),vec3<f32>(-0.08,-0.72,-0.68),vec3<f32>(-0.7,-0.45,0.56));
-
 /* directional artifacts can be reduced by rotating each octave */
 fn simplex3d_fractal(m: vec3<f32>) -> f32 {
     return 0.5333333*simplex3d(m*rot1)
@@ -93,36 +96,28 @@ fn simplex3d_fractal(m: vec3<f32>) -> f32 {
 			+0.0666667*simplex3d(8.0*m);
 }
 
+fn vector_field(p: vec3<f32>, scale: f32) -> vec3<f32> {
+    let pos: vec3<f32> = p * scale;
 
+    let x_p = pos;
+    let y_p = pos + vec3<f32>(1000.0,0.0,0.0);
+    let z_p = pos + vec3<f32>(2000.0,0.0,0.0);
 
-
-
-fn psin(x: f32) -> f32 {
-    return (sin(x)+1.0)/2.0;
+    let x_n = simplex3d_fractal(x_p);
+    let y_n = simplex3d_fractal(y_p);
+    let z_n = simplex3d_fractal(z_p);
+    let direction = vec3<f32>(x_n,y_n,0.0);
+    return direction;
 }
 
-fn yawpitch_to_direction(yaw: f32, pitch: f32) -> vec3<f32> {
-    let sin_pitch = sin(pitch);
-    let cos_pitch = cos(pitch);
-    let sin_yaw = sin(yaw);
-    let cos_yaw = cos(yaw);
-    return normalize(vec3<f32>(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw));
+fn curl(pos: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(0.0,0.0,0.0);
 }
 
 
-
-fn compute_velocity(pos: vec3<f32>) -> vec3<f32> {
-    let direction_noise = simplex3d_fractal(pos * direction_noise_scale);
-    let speed_noise = 0.5 + simplex3d_fractal(pos * speed_noise_scale);
-
-    //Yaw between 0 and 2pi
-    let yaw = direction_noise * pi * 2.0;
-    //Pitch between 
-    let pitch = sin(direction_noise * pi * 2.0 * 4.0) * pi;
-    let dir = yawpitch_to_direction(yaw,pitch);
-    let speed = speed_noise * speed_multiplier;
-    let vel = dir * speed;
-    return vel;
+fn compute_vel(pos: vec3<f32>) -> vec3<f32> {
+    let vf = vector_field(pos,noise_scale) + vec3<f32>(0.0,0.6,0.0);
+    return (vf * speed_multiplier);
 }
 
 fn clamp_position(pos: vec4<f32>) -> vec4<f32> {
@@ -165,11 +160,9 @@ fn main(
         return;
     }
     var p = particles_src.particles[index];
-    let newVel = compute_velocity(p.position.xyz);
-    let oldVel = p.velocity.xyz;
+    let new_velocity = compute_vel(p.position.xyz);
 
-    let v = mix(oldVel,newVel,velocity_weight);
-    p.velocity = vec4<f32>(v,0.0);
+    p.velocity = vec4<f32>(new_velocity,0.0);
     p.position = p.position + p.velocity * DT;
     p.position = clamp_position(p.position);
     particles_dst.particles[index] = p;

@@ -8,9 +8,8 @@ use super::particle_gpu::{self, Particle, ParticleGPU};
 use super::time::Time;
 use super::{gpu::Gpu, math::UVec2};
 
-pub const NUM_PARTICLES: usize = 2000000;
+pub const NUM_PARTICLES: usize = 1000000;
 const cube_size: f32 = 200.0;
-const SPAWN_SIZE: [f32; 3] = [100.0, 100.0, 0.0];
 
 pub struct ParticleSystem {
     pub particle_gpu: ParticleGPU,
@@ -18,34 +17,7 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    fn create_particle_data() -> Vec<Particle> {
-        let mut particle_data: Vec<Particle> = Vec::new();
-
-        let step = cube_size / 100.0;
-        for x in 0..100 {
-            for y in 0..100 {
-                for z in 0..100 {
-                    let xx = (x as f32) * step - (cube_size / 2.0);
-                    let yy = (y as f32) * step - (cube_size / 2.0);
-                    let zz = (z as f32) * step - (cube_size / 2.0);
-
-                    let x_v = 0.0;
-                    let y_v = 0.0;
-                    let z_v = 0.0;
-
-                    let r = 0.0;
-                    let g = 0.0;
-                    let b = 0.0;
-                    particle_data.push(Particle {
-                        position: [xx, yy, zz, 1.0],
-                        velocity: [x_v, y_v, z_v, 0.0],
-                        color: [r, g, b, 1.0],
-                    });
-                }
-            }
-        }
-        particle_data
-    }
+   
 
     fn create_particle_data_random() -> Vec<Particle> {
         let mut particle_data: Vec<Particle> = Vec::new();
@@ -53,8 +25,8 @@ impl ParticleSystem {
         for i in 0..NUM_PARTICLES {
             let x = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
             let y = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
-            let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
-
+            //let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
+            let z = 0.0;
             let x_v = 0.0;
             let y_v = 0.0;
             let z_v = 0.0;
