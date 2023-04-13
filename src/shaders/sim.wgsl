@@ -106,21 +106,25 @@ fn vector_field(p: vec3<f32>, scale: f32) -> vec3<f32> {
     let x_n = simplex3d_fractal(x_p);
     let y_n = simplex3d_fractal(y_p);
     let z_n = simplex3d_fractal(z_p);
-    let direction = vec3<f32>(x_n,y_n,0.0);
+    let direction = vec3<f32>(x_n,y_n,z_n);
     return direction;
 }
+
+
+
+
 
 fn curl(pos: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(0.0,0.0,0.0);
 }
 
 
-fn compute_vel(pos: vec3<f32>) -> vec3<f32> {
-    let vf = vector_field(pos,noise_scale) + vec3<f32>(0.0,0.6,0.0);
-    return (vf * speed_multiplier);
+fn potential(pos: vec3<f32>) -> vec3<f32> {
+    let vf = vector_field(pos,noise_scale);
+    return (vf * 1.0);
 }
 
-fn clamp_position(pos: vec4<f32>) -> vec4<f32> {
+fn clamp_position(pos: vec3<f32>) -> vec3<f32> {
     var p = pos;
     if (p.x < -max_extent) {
         p.x += max_extent;
@@ -143,7 +147,7 @@ fn clamp_position(pos: vec4<f32>) -> vec4<f32> {
         p.z -= max_extent;
     }
 
-    return vec4<f32>(p.xyz,1.0);
+    return p;
 }
 
 @group(0) @binding(0) var<storage, read> particles_src : Particles;
@@ -159,13 +163,29 @@ fn main(
     if (index >= total) {
         return;
     }
-    var p = particles_src.particles[index];
-    let new_velocity = compute_vel(p.position.xyz);
+    var part = particles_src.particles[index];
+    let p = part.position.xyz;
+    let pot = potential(p);
+    let epsilon = 0.00001;
+    // Partial derivatives of different components of the potential
+    let dp3_dy = (pot.z - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).z / epsilon;
+    let dp2_dz = (pot.y - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).y / epsilon;
+    let dp1_dz = (pot.x - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).x / epsilon;
+    let dp3_dx = (pot.z - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).z / epsilon;
+    let dp2_dx = (pot.y - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).y / epsilon;
+    let dp1_dy = (pot.x - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).x / epsilon;
 
-    p.velocity = vec4<f32>(new_velocity,0.0);
-    p.position = p.position + p.velocity * DT;
-    p.position = clamp_position(p.position);
-    particles_dst.particles[index] = p;
+    // vel = nabla x potential
+    // Since this vecotor field has only a vector potential component
+    // it is divergent free and hence contains no sources
+    let new_velocity = vec3<f32>(dp3_dy - dp2_dz, dp1_dz - dp3_dx, dp2_dx - dp1_dy);
+    var new_position = p + new_velocity * DT;
+    new_position = clamp_position(new_position);
+
+    part.position = vec4<f32>(new_position,1.0);
+    part.velocity = vec4<f32>(new_velocity,0.0);
+    
+    particles_dst.particles[index] = part;
 }
 
 
