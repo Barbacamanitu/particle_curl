@@ -1,5 +1,6 @@
 use std::mem;
 
+use cgmath::Vector3;
 use rand::Rng;
 use wgpu::util::DeviceExt;
 
@@ -23,7 +24,7 @@ impl ParticleSystem {
         for i in 0..NUM_PARTICLES {
             let x = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
             let y = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
-            let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size;
+            let z = (rng.gen_range(0.0..1.0) - 0.5) * cube_size * 0.1;
             //let z = 0.0;
             let x_v = 0.0;
             let y_v = 0.0;
@@ -127,6 +128,7 @@ impl ParticleSystem {
                 &self.particle_gpu.particle_bind_groups[time.render_ticks() % 2],
                 &[],
             );
+            compute_pass.set_bind_group(2, &self.particle_gpu.params_bind_group, &[]);
 
             compute_pass.dispatch_workgroups(self.particle_gpu.work_group_count, 1, 1);
         }

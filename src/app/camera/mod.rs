@@ -238,7 +238,6 @@ impl FPSCamera {
         let up: Vector3<f32> = Vector3::unit_y();
 
         let mat = Matrix4::look_to_rh(self.position, direction, up);
-        println!("Camera yaw {}, pitch: {}", self.yaw.0, self.pitch.0);
         mat
     }
 }

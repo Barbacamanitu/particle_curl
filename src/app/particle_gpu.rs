@@ -24,6 +24,9 @@ pub struct ParticleGPU {
     pub compute_pipeline: wgpu::ComputePipeline,
     pub work_group_count: u32,
     pub depth_texture: Texture,
+    pub parameters: ParticleSystemParameters,
+    pub params_buffer: wgpu::Buffer,
+    pub params_bind_group: wgpu::BindGroup,
 }
 
 #[repr(C)]
@@ -31,6 +34,18 @@ pub struct ParticleGPU {
 pub struct Vertex {
     pub position: [f32; 4],
     pub tex_coords: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct ParticleSystemParameters {
+    noise_scale: f32,
+    speed_multiplier: f32,
+    curl_multiplier: f32,
+    constant_force: [f32; 3],
+    potential_curl_mix: f32,
+    elapsed_time: f32,
+    time_multiplier: f32,
 }
 
 #[repr(C)]
@@ -67,6 +82,32 @@ const QUAD_VERTICES: &[Vertex] = &[
 const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
 impl ParticleGPU {
+    fn create_parameters_buffer(gpu: &Gpu, params: &ParticleSystemParameters) -> wgpu::Buffer {
+        gpu.device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Params Buffer"),
+                contents: bytemuck::bytes_of(params),
+                usage: wgpu::BufferUsages::UNIFORM
+                    | wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST,
+            })
+    }
+
+    fn create_paramaters_bind_group(
+        gpu: &Gpu,
+        param_buffer: &wgpu::Buffer,
+        compute_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::BindGroup {
+        gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &compute_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: param_buffer.as_entire_binding(),
+            }],
+            label: None,
+        })
+    }
+
     fn generate_particle_buffers(gpu: &Gpu, particle_data: &Vec<Particle>) -> Vec<wgpu::Buffer> {
         let mut buffers: Vec<wgpu::Buffer> = Vec::new();
 
@@ -112,6 +153,17 @@ impl ParticleGPU {
     }
 
     pub fn new(gpu: &Gpu, fat_cam: &FatCamera, particle_data: &Vec<Particle>) -> Self {
+        let parameters = ParticleSystemParameters {
+            noise_scale: 0.01,
+            speed_multiplier: 20.0,
+            curl_multiplier: 20.0,
+            constant_force: [0.0, 1.0, 0.0],
+            potential_curl_mix: 1.0,
+            elapsed_time: 0.0,
+            time_multiplier: 1.0,
+        };
+        let params_buffer = Self::create_parameters_buffer(gpu, &parameters);
+
         let quad_vertex_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -186,13 +238,20 @@ impl ParticleGPU {
         let particle_buffers = Self::generate_particle_buffers(gpu, particle_data);
 
         let render_pipeline = Self::build_render_pipeline(gpu, &texture_bind_group_layout, fat_cam);
-        let (compute_bind_group_layout, compute_pipeline) =
+        let (compute_bind_group_layout, param_bg_layout, compute_pipeline) =
             Self::build_compute_pipeline(gpu, particle_data.len());
+
         let particle_bind_groups =
             Self::generate_particle_bind_groups(gpu, &compute_bind_group_layout, &particle_buffers);
 
+        println!("creating params");
+        let params_bind_group =
+            Self::create_paramaters_bind_group(gpu, &params_buffer, &param_bg_layout);
+        println!("creating params2");
+
         let work_group_count =
             ((particle_data.len() as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+
         ParticleGPU {
             quad_vertex_buffer,
             quad_index_buffer,
@@ -205,13 +264,20 @@ impl ParticleGPU {
             compute_pipeline,
             work_group_count,
             depth_texture,
+            parameters,
+            params_buffer,
+            params_bind_group,
         }
     }
 
     fn build_compute_pipeline(
         gpu: &Gpu,
         num_particles: usize,
-    ) -> (wgpu::BindGroupLayout, wgpu::ComputePipeline) {
+    ) -> (
+        wgpu::BindGroupLayout,
+        wgpu::BindGroupLayout,
+        wgpu::ComputePipeline,
+    ) {
         let shader_src = include_str!("../shaders/sim.wgsl");
         let compute_shader = gpu
             .device
@@ -219,6 +285,7 @@ impl ParticleGPU {
                 label: Some("Sim Shader"),
                 source: wgpu::ShaderSource::Wgsl(shader_src.into()),
             });
+
         let compute_bind_group_layout =
             gpu.device
                 .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -247,14 +314,28 @@ impl ParticleGPU {
                     label: None,
                 });
 
+        let param_bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new((32 * 9) as _),
+                        },
+                        count: None,
+                    }],
+                    label: None,
+                });
         let compute_pipeline_layout =
             gpu.device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("particle system compute"),
-                    bind_group_layouts: &[&compute_bind_group_layout],
+                    bind_group_layouts: &[&compute_bind_group_layout, &param_bind_group_layout],
                     push_constant_ranges: &[],
                 });
-
         let compute_pipeline =
             gpu.device
                 .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -263,7 +344,11 @@ impl ParticleGPU {
                     module: &compute_shader,
                     entry_point: "main",
                 });
-        (compute_bind_group_layout, compute_pipeline)
+        (
+            compute_bind_group_layout,
+            param_bind_group_layout,
+            compute_pipeline,
+        )
     }
 
     fn build_render_pipeline(

@@ -1,7 +1,10 @@
 
 //Parameters
-let noise_scale: f32 = 0.010;
-let speed_multiplier: f32 = 35.0;
+let noise_scale: f32 = 0.008;
+let speed_multiplier: f32 = 40.0;
+let curl_multiplier: f32 = 40.0;
+let constant_force: vec3<f32> = vec3<f32>(0.0,0.0,0.0);
+let v_curl_mix: f32 = 1.0;
 let max_extent: f32 = 300.0;
 
 //Constants
@@ -10,6 +13,16 @@ let rot1: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.37, 0.36, 0.85),vec3<f32>(-0.14
 let rot2: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.55,-0.39, 0.74),vec3<f32>( 0.33,-0.91,-0.24),vec3<f32>(0.77, 0.12,0.63));
 let rot3: mat3x3<f32> = mat3x3<f32>(vec3<f32>(-0.71, 0.52,-0.47),vec3<f32>(-0.08,-0.72,-0.68),vec3<f32>(-0.7,-0.45,0.56));
 
+
+struct ParticleSystemParameters {
+    p_noise_scale: f32,
+    p_speed_multiplier: f32,
+    p_curl_multiplier: f32,
+    p_constant_force: vec3<f32>,
+    p_potential_curl_mix: f32,
+    p_elapsed_time: f32,
+    p_time_multiplier: f32,
+}
 
 struct Particle {
     position: vec4<f32>,
@@ -106,23 +119,37 @@ fn vector_field(p: vec3<f32>, scale: f32) -> vec3<f32> {
     let x_n = simplex3d(x_p);
     let y_n = simplex3d(y_p);
     let z_n = simplex3d(z_p);
-    let direction = vec3<f32>(x_n,y_n,z_n) + vec3<f32>(0.0,0.6,0.0);
+    let direction = vec3<f32>(x_n,y_n,z_n);
     return direction;
 }
 
-
-
-
-
-fn curl(pos: vec3<f32>) -> vec3<f32> {
-    return vec3<f32>(0.0,0.0,0.0);
-}
-
-
 fn potential(pos: vec3<f32>) -> vec3<f32> {
-    let vf = vector_field(pos,noise_scale);
+    var vf = vector_field(pos,noise_scale);
+    vf = vf + constant_force;
     return (vf * speed_multiplier);
 }
+
+
+
+fn curl(p: vec3<f32>) -> vec3<f32> {
+    let pot = potential(p);
+    let epsilon = 0.0001;
+    // Partial derivatives of different components of the potential
+    let dp3_dy = (pot.z - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).z / epsilon;
+    let dp2_dz = (pot.y - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).y / epsilon;
+    let dp1_dz = (pot.x - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).x / epsilon;
+    let dp3_dx = (pot.z - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).z / epsilon;
+    let dp2_dx = (pot.y - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).y / epsilon;
+    let dp1_dy = (pot.x - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).x / epsilon;
+
+    // vel = nabla x potential
+    // Since this vecotor field has only a vector potential component
+    // it is divergent free and hence contains no sources
+    return vec3<f32>(dp3_dy - dp2_dz, dp1_dz - dp3_dx, dp2_dx - dp1_dy) * curl_multiplier;
+}
+
+
+
 
 fn clamp_position(pos: vec3<f32>) -> vec3<f32> {
     var p = pos;
@@ -152,6 +179,7 @@ fn clamp_position(pos: vec3<f32>) -> vec3<f32> {
 
 @group(0) @binding(0) var<storage, read> particles_src : Particles;
 @group(0) @binding(1) var<storage, read_write> particles_dst : Particles;
+@group(1) @binding(0) var<storage, read> parameters : ParticleSystemParameters;
 
 @compute @workgroup_size(64)
 fn main(
@@ -165,20 +193,11 @@ fn main(
     }
     var part = particles_src.particles[index];
     let p = part.position.xyz;
-    let pot = potential(p);
-    let epsilon = 0.0001;
-    // Partial derivatives of different components of the potential
-    let dp3_dy = (pot.z - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).z / epsilon;
-    let dp2_dz = (pot.y - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).y / epsilon;
-    let dp1_dz = (pot.x - potential(vec3<f32>(p.x, p.y, p.z + epsilon))).x / epsilon;
-    let dp3_dx = (pot.z - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).z / epsilon;
-    let dp2_dx = (pot.y - potential(vec3<f32>(p.x + epsilon, p.y, p.z))).y / epsilon;
-    let dp1_dy = (pot.x - potential(vec3<f32>(p.x, p.y + epsilon, p.z))).x / epsilon;
+    
+    let potential_velocity = potential(p);
+    let curl_velocity = curl(p);
+    let new_velocity = mix(potential_velocity,curl_velocity,v_curl_mix);
 
-    // vel = nabla x potential
-    // Since this vecotor field has only a vector potential component
-    // it is divergent free and hence contains no sources
-    let new_velocity = vec3<f32>(dp3_dy - dp2_dz, dp1_dz - dp3_dx, dp2_dx - dp1_dy);
     var new_position = p + new_velocity * DT;
     new_position = clamp_position(new_position);
 
